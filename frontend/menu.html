@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Menu — Restaurant Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">🍽️ <span>Restaurant</span> Manager</div>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="menu.html" class="active">Menu</a>
+      <a href="create-order.html">New Order</a>
+      <a href="orders.html">Orders</a>
+      <button class="btn-logout" id="logoutBtn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page">
+
+    <div class="page-heading">
+      <h2>🍔 Menu Items</h2>
+      <a href="edit-menu-item.html" class="btn btn-primary">+ Add Item</a>
+    </div>
+
+    <div class="alert alert-error"   id="errorMsg"></div>
+    <div class="alert alert-success" id="successMsg"></div>
+
+    <!-- Category filter -->
+    <div class="filter-bar" id="filterBar">
+      <button class="filter-btn active" data-id="">All</button>
+    </div>
+
+    <!-- Menu grid -->
+    <div class="menu-grid" id="menuGrid">
+      <p style="color:var(--muted);">Loading menu items…</p>
+    </div>
+
+  </div>
+
+  <!-- Delete confirmation modal -->
+  <div class="modal-overlay" id="deleteModal">
+    <div class="modal">
+      <h3>Delete Menu Item?</h3>
+      <p id="deleteModalText">This action cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn btn-danger"    id="confirmDeleteBtn">Yes, Delete</button>
+        <button class="btn btn-outline"   id="cancelDeleteBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = 'login.html';
+    });
+
+    const menuGrid   = document.getElementById('menuGrid');
+    const filterBar  = document.getElementById('filterBar');
+    const errorMsg   = document.getElementById('errorMsg');
+    const successMsg = document.getElementById('successMsg');
+
+    let allItems      = [];
+    let categories    = [];
+    let activeCatId   = '';
+    let deleteTargetId = null;
+
+    // ── Load categories for filter bar ──────────────────────────────
+    async function loadCategories() {
+      try {
+        const res  = await fetch('http://localhost:5100/api/categories');
+        const data = await res.json();
+        if (!res.ok) return;
+        categories = data.data;
+
+        categories.forEach(cat => {
+          const btn = document.createElement('button');
+          btn.className   = 'filter-btn';
+          btn.dataset.id  = cat.id;
+          btn.textContent = cat.name;
+          filterBar.appendChild(btn);
+        });
+      } catch { /* silently ignore */ }
+    }
+
+    // ── Load menu items ─────────────────────────────────────────────
+    async function loadMenuItems(categoryId = '') {
+      menuGrid.innerHTML = '<p style="color:var(--muted);">Loading…</p>';
+      try {
+        const url = categoryId
+          ? `http://localhost:5100/api/menu-items?category_id=${categoryId}`
+          : 'http://localhost:5100/api/menu-items';
+
+        const res  = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.message || 'Failed to load menu items.');
+          menuGrid.innerHTML = '';
+          return;
+        }
+
+        allItems = data.data;
+        renderMenu(allItems);
+
+      } catch {
+        showError('Could not reach the server.');
+        menuGrid.innerHTML = '';
+      }
+    }
+
+    // ── Render menu cards ────────────────────────────────────────────
+    function renderMenu(items) {
+      if (items.length === 0) {
+        menuGrid.innerHTML = '<p style="color:var(--muted);">No menu items found.</p>';
+        return;
+      }
+
+      menuGrid.innerHTML = items.map(item => `
+        <div class="menu-card" id="card-${item.id}">
+          <div class="menu-card-body">
+            <span class="category-tag">${item.category ? item.category.name : 'Uncategorised'}</span>
+            <h3>${escHtml(item.name)}</h3>
+            <p>${escHtml(item.description || 'No description.')}</p>
+            <div class="price">₦${Number(item.price).toLocaleString('en-NG', {minimumFractionDigits:2})}</div>
+          </div>
+          <div class="menu-card-actions">
+            <a href="edit-menu-item.html?id=${item.id}"
+               class="btn btn-info btn-sm" title="Edit item">✏️ Edit</a>
+            <button class="btn btn-danger btn-sm"
+               onclick="openDeleteModal(${item.id}, '${escAttr(item.name)}')"
+               title="Delete item">🗑️ Delete</button>
+            <a href="create-order.html?item=${item.id}"
+               class="btn btn-success btn-sm" title="Order this item">🛒 Order</a>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ── Filter buttons ───────────────────────────────────────────────
+    filterBar.addEventListener('click', (e) => {
+      const btn = e.target.closest('.filter-btn');
+      if (!btn) return;
+
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      activeCatId = btn.dataset.id;
+      loadMenuItems(activeCatId);
+    });
+
+    // ── Delete modal ─────────────────────────────────────────────────
+    const deleteModal      = document.getElementById('deleteModal');
+    const deleteModalText  = document.getElementById('deleteModalText');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    const cancelDeleteBtn  = document.getElementById('cancelDeleteBtn');
+
+    function openDeleteModal(id, name) {
+      deleteTargetId = id;
+      deleteModalText.textContent = `Delete "${name}"? This action cannot be undone.`;
+      deleteModal.classList.add('show');
+    }
+
+    cancelDeleteBtn.addEventListener('click', () => {
+      deleteModal.classList.remove('show');
+      deleteTargetId = null;
+    });
+
+    confirmDeleteBtn.addEventListener('click', async () => {
+      if (!deleteTargetId) return;
+      deleteModal.classList.remove('show');
+      confirmDeleteBtn.disabled = true;
+
+      try {
+        const res  = await fetch(`http://localhost:5100/api/menu-items/${deleteTargetId}`, {
+          method:  'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.message || 'Delete failed.');
+        } else {
+          showSuccess(`Item deleted successfully.`);
+          document.getElementById(`card-${deleteTargetId}`)?.remove();
+          // If grid is now empty
+          if (!menuGrid.children.length) {
+            menuGrid.innerHTML = '<p style="color:var(--muted);">No menu items found.</p>';
+          }
+        }
+      } catch {
+        showError('Could not reach the server.');
+      } finally {
+        confirmDeleteBtn.disabled = false;
+        deleteTargetId = null;
+      }
+    });
+
+    // ── Helpers ──────────────────────────────────────────────────────
+    function showError(msg)   { errorMsg.textContent   = msg; errorMsg.classList.add('show');   successMsg.classList.remove('show'); }
+    function showSuccess(msg) { successMsg.textContent = msg; successMsg.classList.add('show'); errorMsg.classList.remove('show'); }
+    function escHtml(str)  { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function escAttr(str)  { return String(str).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+    // ── Init ─────────────────────────────────────────────────────────
+    (async () => {
+      await loadCategories();
+      await loadMenuItems();
+    })();
+  </script>
+
+</body>
+</html>

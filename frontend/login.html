@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Restaurant Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="page-sm">
+    <div class="card">
+      <div class="auth-header">
+        <div class="brand-icon">🍽️</div>
+        <h1>Welcome Back</h1>
+        <p>Sign in to manage your restaurant</p>
+      </div>
+
+      <div class="alert alert-error" id="errorMsg"></div>
+
+      <form id="loginForm" novalidate>
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="admin@restaurant.com"
+            required
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Your password"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="submitBtn">
+          Sign In
+        </button>
+      </form>
+
+      <div class="form-footer">
+        Don't have an account? <a href="signup.html">Sign up here</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // If already logged in, redirect to dashboard
+    if (localStorage.getItem('token')) {
+      window.location.href = 'dashboard.html';
+    }
+
+    const form      = document.getElementById('loginForm');
+    const errorMsg  = document.getElementById('errorMsg');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.classList.remove('show');
+
+      const email    = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) {
+        showError('Please fill in both fields.');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing in…';
+
+      try {
+        const res  = await fetch('http://localhost:5100/api/users/login', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.message || 'Login failed. Check your credentials.');
+          return;
+        }
+
+        // Save token and user info
+        localStorage.setItem('token', data.details.token);
+        localStorage.setItem('user',  JSON.stringify({
+          id:    data.details.id,
+          name:  data.details.name,
+          email: data.details.email,
+          role:  data.details.role,
+        }));
+
+        window.location.href = 'dashboard.html';
+
+      } catch (err) {
+        showError('Could not reach the server. Make sure the backend is running.');
+      } finally {
+        submitBtn.disabled    = false;
+        submitBtn.textContent = 'Sign In';
+      }
+    });
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.classList.add('show');
+    }
+  </script>
+
+</body>
+</html>

@@ -214,3 +214,44 @@ Submit your complete project before the Monday presentation, including:
 * README with instructions for running the project locally.
 
 Important: The frontend does not need to look professional or contain advanced features. The main goal is to demonstrate that your frontend, Express API, and PostgreSQL database work together as one system.
+
+
+
+
+localhost:5100
+
+  # Users
+  POST   /api/users/register      - Register (validates with Zod)
+  POST   /api/users/login         - Login, returns JWT
+  GET    /api/users               - Get all users (auth required)
+  GET    /api/users/:id           - Get single user (auth required)
+  PATCH  /api/users/:id           - Update user (auth required)
+  DELETE /api/users/:id           - Delete user (auth required)
+  
+  # Categories
+  GET    /api/categories          - Get all (with their menu items)
+  GET    /api/categories/:id      - Get single
+  POST   /api/categories          - Create (auth required)
+  PATCH  /api/categories/:id      - Update (auth required)
+  DELETE /api/categories/:id      - Delete (auth required, blocks if items exist)
+  
+  # Menu Items
+  GET    /api/menu-items          - Get all (?category_id=X to filter)
+  GET    /api/menu-items/:id      - Get single
+  POST   /api/menu-items          - Create (auth required)
+  PATCH  /api/menu-items/:id      - Update (auth required)
+  DELETE /api/menu-items/:id      - Delete (auth required)
+  
+  # Orders
+  POST   /api/orders              - Create order with items array
+  GET    /api/orders              - Get all orders (auth required)
+  GET    /api/orders/:id          - Get single order with items
+  PATCH  /api/orders/:id          - Update status/notes (auth required)
+  DELETE /api/orders/:id          - Delete order (auth required)
+  
+  # Order Items (nested)
+  GET    /api/orders/:order_id/items     - Get items for an order
+  POST   /api/orders/:order_id/items    - Add item to order
+  PATCH  /api/orders/items/:id          - Update item quantity (auth required)
+  DELETE /api/orders/items/:id          - Remove item (auth required)
+  

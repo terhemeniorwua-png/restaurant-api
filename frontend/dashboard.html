@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Restaurant Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">🍽️ <span>Restaurant</span> Manager</div>
+    <div class="nav-links">
+      <a href="dashboard.html" class="active">Dashboard</a>
+      <a href="menu.html">Menu</a>
+      <a href="create-order.html">New Order</a>
+      <a href="orders.html">Orders</a>
+      <button class="btn-logout" id="logoutBtn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page">
+
+    <div style="margin-bottom:2rem;">
+      <h2 style="font-size:1.6rem;color:var(--dark);">
+        Welcome back, <span id="userName" style="color:var(--brand);">…</span> 👋
+      </h2>
+      <p style="color:var(--muted);margin-top:.3rem;">
+        Here's a quick overview of your restaurant system.
+      </p>
+    </div>
+
+    <!-- Stats row -->
+    <div class="dash-grid" id="statsRow">
+      <div class="card" style="text-align:center;padding:1.5rem;">
+        <div style="font-size:2rem;">🍔</div>
+        <div style="font-size:2rem;font-weight:700;color:var(--brand);" id="statMenuItems">—</div>
+        <div style="color:var(--muted);font-size:.9rem;">Menu Items</div>
+      </div>
+      <div class="card" style="text-align:center;padding:1.5rem;">
+        <div style="font-size:2rem;">🗂️</div>
+        <div style="font-size:2rem;font-weight:700;color:var(--brand);" id="statCategories">—</div>
+        <div style="color:var(--muted);font-size:.9rem;">Categories</div>
+      </div>
+      <div class="card" style="text-align:center;padding:1.5rem;">
+        <div style="font-size:2rem;">🧾</div>
+        <div style="font-size:2rem;font-weight:700;color:var(--brand);" id="statOrders">—</div>
+        <div style="color:var(--muted);font-size:.9rem;">Total Orders</div>
+      </div>
+      <div class="card" style="text-align:center;padding:1.5rem;">
+        <div style="font-size:2rem;">⏳</div>
+        <div style="font-size:2rem;font-weight:700;color:var(--brand);" id="statPending">—</div>
+        <div style="color:var(--muted);font-size:.9rem;">Pending Orders</div>
+      </div>
+    </div>
+
+    <!-- Navigation cards -->
+    <h3 style="margin-top:2.5rem;margin-bottom:1rem;color:var(--dark);">Quick Access</h3>
+    <div class="dash-grid">
+      <a href="menu.html" class="dash-card">
+        <div class="icon">🍔</div>
+        <h3>View Menu</h3>
+        <p>Browse, edit and delete menu items. Filter by category.</p>
+      </a>
+      <a href="create-order.html" class="dash-card">
+        <div class="icon">🛒</div>
+        <h3>New Order</h3>
+        <p>Select items and quantities to place a new order.</p>
+      </a>
+      <a href="orders.html" class="dash-card">
+        <div class="icon">🧾</div>
+        <h3>View Orders</h3>
+        <p>See all existing orders and their full details.</p>
+      </a>
+      <a href="edit-menu-item.html" class="dash-card">
+        <div class="icon">✏️</div>
+        <h3>Add Menu Item</h3>
+        <p>Create a new item and assign it to a category.</p>
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    // Guard: redirect to login if not authenticated
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    document.getElementById('userName').textContent = user.name || 'User';
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = 'login.html';
+    });
+
+    // Load live stats from API
+    (async () => {
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const [menuRes, catRes, ordersRes] = await Promise.all([
+          fetch('http://localhost:5100/api/menu-items'),
+          fetch('http://localhost:5100/api/categories'),
+          fetch('http://localhost:5100/api/orders', { headers }),
+        ]);
+
+        if (menuRes.ok) {
+          const d = await menuRes.json();
+          document.getElementById('statMenuItems').textContent = d.data.length;
+        }
+        if (catRes.ok) {
+          const d = await catRes.json();
+          document.getElementById('statCategories').textContent = d.data.length;
+        }
+        if (ordersRes.ok) {
+          const d = await ordersRes.json();
+          document.getElementById('statOrders').textContent = d.data.length;
+          const pending = d.data.filter(o => o.status === 'pending').length;
+          document.getElementById('statPending').textContent = pending;
+        }
+      } catch {
+        // stats stay as — if backend is unreachable
+      }
+    })();
+  </script>
+
+</body>
+</html>

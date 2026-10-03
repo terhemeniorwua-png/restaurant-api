@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Order — Restaurant Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">🍽️ <span>Restaurant</span> Manager</div>
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="menu.html">Menu</a>
+      <a href="create-order.html" class="active">New Order</a>
+      <a href="orders.html">Orders</a>
+      <button class="btn-logout" id="logoutBtn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="page">
+
+    <div class="page-heading">
+      <h2>🛒 Create New Order</h2>
+      <a href="orders.html" class="btn btn-outline">View All Orders</a>
+    </div>
+
+    <div class="alert alert-error"   id="errorMsg"></div>
+    <div class="alert alert-success" id="successMsg"></div>
+
+    <div class="order-layout">
+
+      <!-- Left: menu to pick from -->
+      <div>
+        <!-- Category filter -->
+        <div class="filter-bar" id="filterBar">
+          <button class="filter-btn active" data-id="">All</button>
+        </div>
+
+        <!-- Menu cards -->
+        <div class="menu-grid" id="menuGrid">
+          <p style="color:var(--muted);">Loading menu…</p>
+        </div>
+      </div>
+
+      <!-- Right: cart / order summary -->
+      <div class="order-sidebar">
+        <h3>🧾 Order Summary</h3>
+
+        <div id="cartItems">
+          <p class="cart-empty">No items added yet.<br>Click <strong>Add to Order</strong> on any item.</p>
+        </div>
+
+        <div class="cart-total" id="cartTotal" style="display:none;">
+          <span>Total</span>
+          <span id="totalAmount">₦0.00</span>
+        </div>
+
+        <div class="form-group" style="margin-top:1rem;">
+          <label for="orderNotes">Notes (optional)</label>
+          <textarea id="orderNotes" placeholder="Any special requests…" style="min-height:60px;"></textarea>
+        </div>
+
+        <button class="btn btn-primary btn-full" id="placeOrderBtn" style="margin-top:.5rem;" disabled>
+          Place Order
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = 'login.html';
+    });
+
+    const errorMsg      = document.getElementById('errorMsg');
+    const successMsg    = document.getElementById('successMsg');
+    const menuGrid      = document.getElementById('menuGrid');
+    const filterBar     = document.getElementById('filterBar');
+    const cartItemsEl   = document.getElementById('cartItems');
+    const cartTotalEl   = document.getElementById('cartTotal');
+    const totalAmountEl = document.getElementById('totalAmount');
+    const placeOrderBtn = document.getElementById('placeOrderBtn');
+
+    // cart: { [menuItemId]: { name, price, quantity } }
+    const cart = {};
+
+    // Pre-select item if coming from menu.html?item=X
+    const preselect = new URLSearchParams(window.location.search).get('item');
+
+    // ── Load categories ──────────────────────────────────────────────
+    async function loadCategories() {
+      try {
+        const res  = await fetch('http://localhost:5100/api/categories');
+        const data = await res.json();
+        if (!res.ok) return;
+
+        data.data.forEach(cat => {
+          const btn = document.createElement('button');
+          btn.className   = 'filter-btn';
+          btn.dataset.id  = cat.id;
+          btn.textContent = cat.name;
+          filterBar.appendChild(btn);
+        });
+      } catch { /* ignore */ }
+    }
+
+    filterBar.addEventListener('click', (e) => {
+      const btn = e.target.closest('.filter-btn');
+      if (!btn) return;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadMenuItems(btn.dataset.id);
+    });
+
+    // ── Load menu items ──────────────────────────────────────────────
+    async function loadMenuItems(catId = '') {
+      menuGrid.innerHTML = '<p style="color:var(--muted);">Loading…</p>';
+      try {
+        const url  = catId
+          ? `http://localhost:5100/api/menu-items?category_id=${catId}`
+          : 'http://localhost:5100/api/menu-items';
+        const res  = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) { menuGrid.innerHTML = '<p style="color:var(--muted);">Failed to load.</p>'; return; }
+
+        renderMenuItems(data.data);
+
+      } catch {
+        menuGrid.innerHTML = '<p style="color:var(--muted);">Server unreachable.</p>';
+      }
+    }
+
+    function renderMenuItems(items) {
+      if (items.length === 0) {
+        menuGrid.innerHTML = '<p style="color:var(--muted);">No items in this category.</p>';
+        return;
+      }
+
+      menuGrid.innerHTML = items.map(item => {
+        const qty = cart[item.id] ? cart[item.id].quantity : 0;
+        const inCart = qty > 0;
+        return `
+          <div class="menu-card">
+            <div class="menu-card-body">
+              <span class="category-tag">${item.category ? escHtml(item.category.name) : 'Uncategorised'}</span>
+              <h3>${escHtml(item.name)}</h3>
+              <p>${escHtml(item.description || 'No description.')}</p>
+              <div class="price">₦${fmtPrice(item.price)}</div>
+            </div>
+            <div class="menu-card-actions" style="align-items:center;">
+              <div class="qty-control">
+                <button onclick="changeQty(${item.id}, '${escAttr(item.name)}', ${item.price}, -1)">−</button>
+                <input type="number" id="qty-${item.id}" value="${qty}" min="0"
+                       onchange="setQty(${item.id}, '${escAttr(item.name)}', ${item.price}, this.value)" />
+                <button onclick="changeQty(${item.id}, '${escAttr(item.name)}', ${item.price}, +1)">+</button>
+              </div>
+              <button class="btn btn-success btn-sm"
+                      id="addBtn-${item.id}"
+                      onclick="addToCart(${item.id}, '${escAttr(item.name)}', ${item.price})"
+                      ${inCart ? 'style="background:var(--muted)"' : ''}>
+                ${inCart ? '✓ Added' : '🛒 Add'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Auto-highlight pre-selected item
+      if (preselect) {
+        const el = document.getElementById(`addBtn-${preselect}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    // ── Cart logic ───────────────────────────────────────────────────
+    function addToCart(id, name, price) {
+      if (!cart[id]) {
+        const qtyInput = document.getElementById(`qty-${id}`);
+        const qty = qtyInput ? Math.max(1, parseInt(qtyInput.value) || 1) : 1;
+        cart[id] = { name, price: parseFloat(price), quantity: qty };
+        if (qtyInput) qtyInput.value = qty;
+      } else {
+        cart[id].quantity = Math.max(1, cart[id].quantity);
+      }
+      renderCart();
+    }
+
+    function changeQty(id, name, price, delta) {
+      const input = document.getElementById(`qty-${id}`);
+      const current = input ? parseInt(input.value) || 0 : 0;
+      const next = Math.max(0, current + delta);
+      if (input) input.value = next;
+
+      if (next === 0) {
+        delete cart[id];
+      } else {
+        cart[id] = { name, price: parseFloat(price), quantity: next };
+      }
+      renderCart();
+      // Update add button state
+      const addBtn = document.getElementById(`addBtn-${id}`);
+      if (addBtn) {
+        addBtn.textContent = next > 0 ? '✓ Added' : '🛒 Add';
+        addBtn.style.background = next > 0 ? 'var(--muted)' : '';
+      }
+    }
+
+    function setQty(id, name, price, value) {
+      const qty = Math.max(0, parseInt(value) || 0);
+      if (qty === 0) {
+        delete cart[id];
+      } else {
+        cart[id] = { name, price: parseFloat(price), quantity: qty };
+      }
+      renderCart();
+    }
+
+    function removeFromCart(id) {
+      delete cart[id];
+      // Reset qty input if visible
+      const input = document.getElementById(`qty-${id}`);
+      if (input) input.value = 0;
+      const addBtn = document.getElementById(`addBtn-${id}`);
+      if (addBtn) { addBtn.textContent = '🛒 Add'; addBtn.style.background = ''; }
+      renderCart();
+    }
+
+    function renderCart() {
+      const entries = Object.entries(cart);
+
+      if (entries.length === 0) {
+        cartItemsEl.innerHTML = '<p class="cart-empty">No items added yet.<br>Click <strong>Add to Order</strong> on any item.</p>';
+        cartTotalEl.style.display = 'none';
+        placeOrderBtn.disabled    = true;
+        return;
+      }
+
+      let total = 0;
+      cartItemsEl.innerHTML = entries.map(([id, item]) => {
+        const subtotal = item.price * item.quantity;
+        total += subtotal;
+        return `
+          <div class="cart-item">
+            <span class="ci-name">${escHtml(item.name)}</span>
+            <span class="ci-qty">×${item.quantity}</span>
+            <span class="ci-price">₦${fmtPrice(subtotal)}</span>
+            <button class="ci-remove" onclick="removeFromCart(${id})" title="Remove">✕</button>
+          </div>
+        `;
+      }).join('');
+
+      totalAmountEl.textContent   = `₦${fmtPrice(total)}`;
+      cartTotalEl.style.display   = 'flex';
+      placeOrderBtn.disabled      = false;
+    }
+
+    // ── Place order ──────────────────────────────────────────────────
+    placeOrderBtn.addEventListener('click', async () => {
+      errorMsg.classList.remove('show');
+      successMsg.classList.remove('show');
+
+      const entries = Object.entries(cart);
+      if (entries.length === 0) { showError('Add at least one item to the order.'); return; }
+
+      const user  = JSON.parse(localStorage.getItem('user') || '{}');
+      const notes = document.getElementById('orderNotes').value.trim();
+
+      const body = {
+        user_id: user.id || null,
+        notes:   notes || null,
+        items:   entries.map(([id, item]) => ({
+          menu_item_id: Number(id),
+          quantity:     item.quantity,
+        })),
+      };
+
+      placeOrderBtn.disabled    = true;
+      placeOrderBtn.textContent = 'Placing order…';
+
+      try {
+        const res  = await fetch('http://localhost:5100/api/orders', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.message || 'Failed to place order.');
+          return;
+        }
+
+        showSuccess(`Order #${data.data.id} placed successfully! Redirecting…`);
+
+        // Clear cart
+        Object.keys(cart).forEach(k => delete cart[k]);
+        renderCart();
+        document.getElementById('orderNotes').value = '';
+
+        setTimeout(() => { window.location.href = `orders.html`; }, 1800);
+
+      } catch {
+        showError('Could not reach the server.');
+      } finally {
+        placeOrderBtn.disabled    = false;
+        placeOrderBtn.textContent = 'Place Order';
+      }
+    });
+
+    // ── Helpers ──────────────────────────────────────────────────────
+    function fmtPrice(n)  { return Number(n).toLocaleString('en-NG', { minimumFractionDigits: 2 }); }
+    function escHtml(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function escAttr(str) { return String(str).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+    function showError(msg)   { errorMsg.textContent   = msg; errorMsg.classList.add('show');   successMsg.classList.remove('show'); }
+    function showSuccess(msg) { successMsg.textContent = msg; successMsg.classList.add('show'); errorMsg.classList.remove('show'); }
+
+    // ── Init ─────────────────────────────────────────────────────────
+    (async () => {
+      await loadCategories();
+      await loadMenuItems();
+    })();
+  </script>
+
+</body>
+</html>

@@ -1,7 +1,5 @@
-export default function Page() {
-  return (
-    <div>
-      Home page of the maoney
-    </div>
-  );
+import { redirect } from 'next/navigation';
+
+export default function Home() {
+  redirect('/login');
 }

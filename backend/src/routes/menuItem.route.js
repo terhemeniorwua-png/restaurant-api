@@ -9,11 +9,12 @@ const {
   updateMenuItem,
   deleteMenuItem,
 } = require('../controllers/menuItem');
+const { authorization } = require('../middleware/authorization');
 
-router.post('/', authenticate, createMenuItem);
+router.post('/', authenticate, authorization, createMenuItem);
 router.get('/', getMenuItems);        // supports ?category_id=X filter
 router.get('/:id', getMenuItem);
-router.patch('/:id', authenticate, updateMenuItem);
-router.delete('/:id', authenticate, deleteMenuItem);
+router.patch('/:id', authenticate, authorization, updateMenuItem);
+router.delete('/:id', authenticate, authorization, deleteMenuItem);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 import { getToken } from './auth';
 
-const BASE_URL = 'http://localhost:5100/api';
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 /**
  * Core fetch wrapper. Automatically attaches Authorization header when a

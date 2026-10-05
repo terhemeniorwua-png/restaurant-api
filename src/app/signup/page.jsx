@@ -23,8 +23,7 @@ export default function SignupPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+   
 
     const { name, email, phone, password, role } = form;
     if (!name || !email || !phone || !password) {
@@ -53,6 +52,9 @@ export default function SignupPage() {
     } finally {
       setLoading(false);
     }
+
+      setError('');
+      setSuccess('');
   }
 
   return (
